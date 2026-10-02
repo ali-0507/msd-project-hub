@@ -1,0 +1,229 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// output   = "../src/generated/prisma"
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PROJECT_INCHARGE
+  DAILY_TASK_OPERATOR
+  PLANNING_OPERATOR
+  MATERIAL_OPERATOR
+  PROJECT_OPERATOR
+  TEAM_LEAD
+  SERVICE_OPERATOR
+  MANAGEMENT
+}
+
+enum TeamType {
+  INSTALLATION
+  SERVICE
+}
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teamId    Int?
+  team      Team?    @relation(fields: [teamId], references: [id])
+
+  managedProjects Project[] @relation("ProjectEngineer")
+
+  @@index([role])
+  @@index([teamId])
+}
+
+model Team {
+  id          Int      @id @default(autoincrement())
+  name        String
+  type        TeamType
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  projects    ProjectTeam[]
+
+  @@index([type])
+}
+
+enum ProjectStatus {
+  RUNNING
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskStatus {
+  PENDING
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Project {
+  id                 Int           @id @default(autoincrement())
+  projectCode        String        @unique
+  name               String
+  clientName         String
+  location           String
+
+  startDate          DateTime
+  expectedCompletion DateTime
+
+  scopeOfWork        String?
+  numberOfBlocks     Int?
+  numberOfFloors     Int?
+
+  contactName        String?
+  contactPhone       String?
+  contactEmail       String?
+
+  specialInstructions String?
+
+  status             ProjectStatus @default(RUNNING)
+
+  engineerId          Int?
+  engineer            User?         @relation("ProjectEngineer", fields: [engineerId], references: [id])
+
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  workAreas          WorkArea[]
+   teams             ProjectTeam[]
+   tasks            Task[]
+   dailyExecutions DailyExecution[]
+
+  @@index([status])
+  @@index([clientName])
+  @@index([startDate])
+  @@index([engineerId])
+}
+
+model WorkArea {
+  id          Int      @id @default(autoincrement())
+
+  projectId   Int
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  block       String?
+  floor       String?
+  area        String?
+  workType    String?
+
+  description String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tasks        Task[]
+  dailyExecutions DailyExecution[]
+  
+
+  @@index([projectId])
+  @@index([block])
+  @@index([floor])
+}
+
+
+model ProjectTeam {
+  id        Int      @id @default(autoincrement())
+
+  projectId Int
+  teamId    Int
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  assignedAt DateTime @default(now())
+
+  @@unique([projectId, teamId])
+  @@index([projectId])
+  @@index([teamId])
+}
+
+model Task {
+  id              Int        @id @default(autoincrement())
+
+  projectId       Int
+  project         Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  workAreaId      Int?
+  workArea        WorkArea?  @relation(fields: [workAreaId], references: [id], onDelete: SetNull)
+
+  title           String
+  description     String?
+
+  priority        Int        @default(3)
+
+  assignedUserId  Int?
+  assignedTeamId  Int?
+
+  status          TaskStatus @default(PENDING)
+
+  assignedAt      DateTime?
+  completedAt     DateTime?
+
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  dailyExecutions DailyExecution[]
+
+  @@index([projectId])
+  @@index([workAreaId])
+  @@index([assignedUserId])
+  @@index([assignedTeamId])
+  @@index([status])
+}
+
+
+model DailyExecution {
+  id              Int      @id @default(autoincrement())
+
+  date            DateTime
+
+  projectId       Int
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  taskId          Int?
+  task           Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  workAreaId      Int?
+  workArea        WorkArea? @relation(fields: [workAreaId], references: [id], onDelete: SetNull)
+
+  assignedWork    String
+  estimatedWork   String?
+
+  actualWork      String?
+  pendingWork     String?
+  pendingReason   String?
+
+  completionPercent Int      @default(0)
+
+  status          TaskStatus @default(PENDING)
+
+  remarks         String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([date])
+  @@index([projectId])
+  @@index([taskId])
+  @@index([workAreaId])
+}
